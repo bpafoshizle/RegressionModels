@@ -1,0 +1,83 @@
+---
+title: "Motor Trend mpg (Arguing with HNDR)"
+author: "Barret Miller"
+output: pdf_document
+---
+###Executive Summary
+In this study, I performed exploratory data analysis and built two models that analyze and attempt to answer the question of what impact the transmission type (manual vs. automatic) of a car has on its miles per gallon (mpg) efficiency. I used the [mtcars](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/mtcars.html) dataset that comes prepackaged with R. This study is of particular interest to me, because my long-time friend who will be named only as HNDR, has long argued the superiority of manual transmissions. I tend to prefer the easygoing comfort (and free hands) offered by the modern technology of automatic transmissions, but HNDR insists that I am wasting money on gas and lowering my testosterone levels by missing out on the thrill of shifting gears myself. While this dataset does not currently offer the possibility of answering the latter, the former question, I hope, can finally be laid to rest as a result of this study.
+
+```{r env, echo = F, message = F, warning = F, tidy = F, results='hide'}
+library(ggplot2)
+data(mtcars)
+mtcars$am <- factor(mtcars$am,labels=c("Automatic","Manual"))
+manMean <- mean(mtcars[mtcars$am=="Manual",c('mpg')])
+autoMean <- mean(mtcars[mtcars$am=="Automatic",c('mpg')])
+fitMarg <- lm(mpg ~ am, data=mtcars)
+p_beta1Marg <- summary(fitMarg)$coefficients[2,4]
+
+
+#fitMulti <- lm(mpg ~ am + wt, data=mtcars)
+fitMultiInt <- lm(mpg ~ am*I(wt-mean(wt)), data=mtcars)
+```
+
+###Exploring the Data Visually
+If I just plot a boxplot of mpg vs. transmission type, I can get an idea of the center and variability of the data. In Figure 1 in the appendix, I have plotted boxplots for the transmission types, a blue line at the mean of manual transmission mpg (`r round(manMean,2)`), and a red line at the mean of automatic transmission mpg (`r round(autoMean,2)`). So, this looks to be a very large marginal effect. The difference in means tells me I can achieve `r round(manMean - autoMean,2)` more miles per gallon by driving a manual. Things are looking good for ole HNDR so far (\^\^\^\^)(-.-)(\^\^\^\^).
+
+###Simple Linear Regression (SLR) Analysis
+I can run a simple linear regression analysis to capture the marginal effect of transmission type on mpg outcome. I will treat automatic transmissions as my reference group, and measure the marginal effect of having a manual transmission. After fitting my linear model, my intercept term $\beta_0$ is the mean of my reference group of automatic transmissions (`r round(coef(fitMarg)[1],2) `). I show the same marginal increase of `r round(coef(fitMarg)[2],2)` for my manual transmission $\beta_1$ coefficient as before just looking at averages, because that what this linear model is doing when you are predicting an outcome of two groups with a single dummy variable. It is also noteworthy that I have a very significant p-value of `r as.character(round(p_beta1Marg, 6))` for the coefficient of transmission type. This suggests that the effect is real. See Figure 2 in the appendix for the linear model summary output.
+
+###Residuals
+A good way to understand if our model explains the outcome well is to look at the residuals and their variation. If there is a lot of variation left over in the mpg data after adjusting for the transmission type, then that suggests there is more to the story. The are other variables that I need to consider to explain more of the variation. In this case, my $R^2$ value is only `r round(summary(fitMarg)$r.squared, 4)`, so about `r round(100*(1-summary(fitMarg)$r.squared), 0)`% or so of the variation is unexplained by transmission type. One good thing to do in order to hone in on your residuals is to plot them versus your predictor. In Figure 3, I've plotted the residuals of the mpg against the transmission type. The fact that there is still so much of the variation in mpg left unexplained, especially within the manual transmission group, tells me that maybe there is another variable that is correlated with transmission types that is really a better predictor of mpg. I need to do further analysis of other variables in the dataset to see if adjusting for any of them will change the effect of transmission type.
+
+
+###Multivariable Regression Analysis
+To start off, I'd like to get a visual of the relationships between the different variables. I ran a pairwise scatterplot of the mtcars dataset for Figure 4. Specifically, I am looking for anything that may be correlated negatively with mpg and which correlates positively with manual vs. automatic transmission. If I look at the relationship of wt (weight) to mpg, it is obviously negatively correlated: as weight goes up, you get less mpg. Interestingly, lower weights also seem to be associated with manual transmissions. Manual is represented by level 1, so it's higher on the y axis with a line sloping down toward the automatics' level 0 as weight increases. The same effect versus am appears with the disp, hp, and cyl variables, however, those variables also appear to be positively correlated with weight, so I won't include those in my model. In fact, most things that appear to be positively correlated with weight show the same splitting of the transmission types where the 1 (manual) is associated with lower values of those variables, and 0 (automatic) is associated with increasing values. All of those variables that positively correlate with weight also negatively correlate with mpg. With that in mind, I am going to try a multivariate model $mpg = \beta_0 + \beta_1 (am="Manual") + \beta_2 wt + \beta_3 (am="Manual") * wt$. I am centering the wt variable, so the intercepts will be interpretable as the the mpg for the average cars within the transmission groupings.
+
+Figure 5 is my vindication from HNDR. The coefficient $\beta_0$ shows that the average weighted automatic has an expected mpg average of `r round(summary(fitMultiInt)$coefficients[1,1],2)`. The intercept for the average weighted manual car, $\beta_1$ (`r round(summary(fitMultiInt)$coefficients[2,1],2)`), is actually negative now, saying that the average manual transmission adjusted for weight is that much lower than the automatic. This is a reversal of the marginal effect from earlier. However, this effect is not significant, so I can't reject the null hypothesis. What are significant, though, are the coefficients for the slopes. $\beta_2$ has a value of `r round(summary(fitMultiInt)$coefficients[3,1],2)`, which means that for automatics, for every 1000lb increase in weight, the mpg goes down by `r round(summary(fitMultiInt)$coefficients[3,1],2)`. $\beta_3$, also significant, shows a decrease of `r round(summary(fitMultiInt)$coefficients[4,1],2)` on top of that of automatics, for a total of decrease of `r round(summary(fitMultiInt)$coefficients[3,1],2) + round(summary(fitMultiInt)$coefficients[4,1],2)` per 1000lb increase in weight. Also, note that the $R^2$ value is much higher at `r round(summary(fitMultiInt)$r.squared, 4)`, suggesting I have explained much of the mpg variance in the data with this model.
+
+Finally, I take a look at the 95% confidence intervals for this model in Figure 6. The lower and upper bounds for the mean automatic mpg are `r round(confint(fitMultiInt)[1,1],2)` and `r round(confint(fitMultiInt)[1,2],2)`. Interestingly, you can see that the bounds for the manaul transmission's effect on top of the mean for automatics (`r round(confint(fitMultiInt)[2,1],2)` and `r round(confint(fitMultiInt)[2,2],2)`) include 0, so we can't reject the null hypothesis. We must accept the reasonable possibility that manual transmissions have no effect on mpg. The confidence intervals for $\beta_2$ and $\beta_3$ are also shown.
+
+###Conclusion
+Our results show that even though there appears to be a significant marginal effect of the transmission type on mpg efficiency giving manual transmissions an edge, in fact this is a myth. Manual transmissions seem to be associated with lighter vehicles, and weight is the most crucial factor. HNDR has been living a lie. Manuals may be cool, but a manual transmission in and of itself is not good for gas milage. If an automatic and a manual vehicle have the same weight, the transmission type is (statistically) insignificant in its effect on mpg.  Furthermore, as you increase the weight of a vehicle, manual tranmissions tend to have a steeper decrease in their mpg efficiency. So, when HNDR loads up all those kegs in the back of his manual blue Chevy S-10, that gas milage is likely going to down more than if that S-10 were an automatic. 
+
+
+###Appendix
+Figure 1:
+
+```{r bxPlt, echo=F}
+#boxplot(mpg~am,data=mtcars,main="Marginal mpg vs. Transmission Type", xlab="Transmission",ylab="mpg")
+ggplot(mtcars, aes(y=mpg, x=am)) + geom_boxplot(aes(fill=am)) + geom_jitter() + 
+   geom_abline(intercept=mean(mtcars[mtcars$am=="Automatic",c('mpg')]), slope=0, colour="red") +
+   geom_abline(intercept=mean(mtcars[mtcars$am=="Manual",c('mpg')]), slope=0, colour="blue") +
+   labs(title = "Marginal mpg vs Transmission Type", x= "Transmission", fill="Transmission", y="mpg")
+```
+
+Figure 2:
+
+```{r fitMarg, cache=T, echo=F}
+summary(fitMarg)
+```
+
+Figure 3:
+
+```{r resid, echo=F}
+ggplot(mtcars, aes(y=resid(fitMarg), x=am)) + geom_point(size=7, colour="black", alpha=0.4) + 
+   geom_hline(yintercept=0, size=2) +
+   labs(title = "Residuals of lm(mpg ~ am) vs Transmission Type", x= "Transmission", fill="Transmission", y="Residuals")
+```
+
+Figure 4:
+
+```{r pairWise, echo=F, fig.width=6}
+pairs(mtcars, panel=panel.smooth, main="MT Cars")
+```
+
+Figure 5:
+```{r fitMulti, echo=F, fig.width=6}
+summary(fitMultiInt)
+```
+
+Figure 6:
+```{r confInt, echo=F, fig.width=6}
+confint(fitMultiInt)
+```
